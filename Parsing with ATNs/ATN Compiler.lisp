@@ -43,7 +43,6 @@
 		 (cons ,val (cdr (assoc ',key (car ,regs))))
 		 ,regs))
 
-
 (defmacro with-gensyms (syms &body body)
   `(let ,(mapcar #'(lambda (s)
 		     `(,s (gensym)))

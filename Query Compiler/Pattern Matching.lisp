@@ -54,6 +54,9 @@
 (defun varsym? (x)
   (and (symbolp x) (eq (char (symbol-name x) 0) #\?)))
 
+(defun gensym? (s)
+  (and (symbolp s) (not (symbol-package s))))
+
 (defmacro aif (test-form then-form &optional else-form)
   `(let ((it ,test-form))
      (if it ,then-form ,else-form)))
@@ -69,16 +72,64 @@
 (defun match (x y &optional binds)
   (acond2
    ((or (eql x y) (eql x '_) (eql y '_)) (values binds t))
-   ((binding x binds) (match it y binds))
-   ((binding y binds) (match x it binds))
-   ((varsym? x) (values (cons (cons x y) binds) t))
-   ((varsym? y) (values (cons (cons y x) binds) t))
-   ((and (consp x) (consp y) (match (car x) (car y) binds))
-    (match (cdr x) (cdr y) it))
-   (t (values nil nil))))
+   ((binding x binds)                    (match it y binds))
+   ((binding y binds)                    (match x it binds))
+   ((varsym? x)                          (values (cons (cons x y) binds) t))
+   ((varsym? y)                          (values (cons (cons y x) binds) t))
+   ((and (consp x) (consp y)
+	 (match (car x) (car y) binds))  (match (cdr x) (cdr y) it))
+   (t                                    (values nil nil))))
 
 (defmacro aif2 (test &optional then else)
   (let ((win (gensym)))
     `(multiple-value-bind (it ,win) ,test
        (if (or it ,win) ,then ,else))))
 
+(defun simple? (x) (or (atom x) (eq (car x) 'quote)))
+
+(defmacro with-gensyms (syms &body body)
+  `(let ,(mapcar #'(lambda (s)
+		     `(,s (gensym)))
+	  syms)
+     ,@body))
+
+(defun length-test (pat rest)
+  (let ((fin (caadar (last rest))))
+    (if (or (consp fin) (eq fin 'elt))
+	`(= (length ,pat) ,(length rest))
+	`(> (length ,pat) ,(- (length rest) 2)))))
+
+(defun match1 (refs then else)
+  (dbind ((pat expr) . rest) refs
+    (cond ((gensym? pat)
+	   `(let ((,pat ,expr))
+	      (if (and (typep ,pat 'sequence)
+		       ,(length-test pat rest))
+		  ,then
+		  ,else)))
+	  ((eq pat '_) then)
+	  ((varsym? pat)
+	   (let ((ge (gensym)))
+	     `(let ((,ge ,expr))
+		(if (or (gensym? ,pat) (equal ,pat ,ge))
+		    (let ((,pat ,ge)) ,then)
+		    ,else))))
+	  (t `(if (equal ,pat ,expr) ,then ,else)))))
+
+(defun gen-match (refs then else)
+  (if (null refs)
+      then
+      (let ((then (gen-match (cdr refs) then else)))
+	(if (simple? (caar refs))
+	    (match1 refs then else)
+	    (gen-match (car refs) then else)))))
+
+(defmacro pat-match (pat seq then else)
+  (if (simple? pat)
+      (match1 `((,pat ,seq)) then else)
+      (with-gensyms (gseq gelse)
+	`(labels ((,gelse () ,else))
+		  ,(gen-match (cons (list gseq seq)
+			       (destruc pat gseq #'simple?))
+		     then
+		     `(,gelse))))))

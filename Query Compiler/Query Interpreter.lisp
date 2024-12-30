@@ -39,14 +39,6 @@
     (not (interpret-not (cadr expr) binds))
     (t   (lookup (car expr) (cdr expr) binds))))
 
-(defun binding (x binds)
-  (labels ((recbind (x binds)
-	     (aif (assoc x binds)
-		  (or (recbind (cdr it) binds)
-		      it))))
-    (let ((b (recbind x binds)))
-      (values (cdr b) b))))
-
 (defmacro with-answer (query &body body)
   (let ((binds (gensym)))
     `(dolist (,binds (interpret-query ',query))

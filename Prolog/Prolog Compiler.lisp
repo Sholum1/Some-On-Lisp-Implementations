@@ -2,8 +2,11 @@
 
 (defvar *rules* nil)
 
-(defun gensym? (x)
-  (and (symbolp x) (not (symbol-package x))))
+(defun clear-rules ()
+  (setf *rules* nil))
+
+;; (defun gensym? (x)
+;;   (and (symbolp x) (not (symbol-package x))))
 
 (defun form (pat)
   (if (simple? pat)
@@ -26,20 +29,13 @@
    ((gensym? x)                          (values (cons (cons x y) binds) t))
    ((gensym? y)                          (values (cons (cons y x) binds) t))
    ((and (consp x) (consp y)
-	 (match (car x) (car y) binds))
-                                         (match (cdr x) (cdr y) it))
+	 (match (car x) (car y) binds))  (match (cdr x) (cdr y) it))
    (t                                    (values nil nil))))
-
-(defmacro <- (con &rest ant)
-  (let ((ant (if (= (length ant) 1)
-                 (car ant)
-                 `(and ,@ant))))
-    `(length (conc1f *rules*
-                     ,(rule-fn (rep_ ant) (rep_ con))))))
 
 (defun rule-fn (ant con)
   (with-gensyms (val win fact binds paths)
     `(=lambda (,fact ,binds ,paths)
+       (declare (ignore ,paths))
        (with-gensyms ,(vars-in (list ant con) #'simple?)
          (multiple-value-bind
                (,val ,win)
@@ -51,12 +47,20 @@
                ,(gen-query ant val paths)
                (fail)))))))
 
+(defmacro <- (con &rest ant)
+  (let ((ant (if (= (length ant) 1)
+                 (car ant)
+                 `(and ,@ant))))
+    `(length (conc1f *rules*
+                     ,(rule-fn (rep_ ant) (rep_ con))))))
+
 (defmacro with-inference (query &rest body)
   (let ((vars (vars-in query #'simple?))
         (gb (gensym)))
     `(with-gensyms ,vars
        (setq *paths* nil)
        (=bind (,gb) ,(gen-query (rep_ query) nil '*paths*)
+	 (declare (ignore ,gb))
          (let ,(mapcar (lambda (v)
                          `(,v (fullbind ,v ,gb)))
                        vars)
@@ -70,11 +74,11 @@
     (not  (gen-not  (cadr expr) binds paths))
     (lisp (gen-lisp (cadr expr) binds))
     (is   (gen-is   (cadr expr) (third expr) binds))
-    (cut  `(progn (setq *paths* ,paths)
-		  (=values,binds)))
-    (t    `(prove (list ',(car expr)
+    (cut  `(progn   (setq *paths* ,paths)
+		    (=values,binds)))
+    (t    `(prove   (list ',(car expr)
 			,@(mapcar #'form (cdr expr)))
-		  ,binds *paths*))))
+		    ,binds *paths*))))
 
 (=defun prove (query binds paths)
   (choose-bind r *rules*
@@ -92,7 +96,7 @@
     ,@(mapcar #'(lambda (c) (gen-query c binds paths))
               clauses)))
 
-(defun gen-not (clauses binds paths)
+(defun gen-not (expr binds paths)
   (let ((gpaths (gensym)))
     `(let ((,gpaths *paths*))
        (setq *paths* nil)

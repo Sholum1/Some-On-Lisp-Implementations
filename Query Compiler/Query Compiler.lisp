@@ -1,13 +1,5 @@
 (load "../Query Compiler/Query Interpreter")
 
-(defmacro with-gensyms (syms &body body)
-  `(let ,(mapcar #'(lambda (s)
-		     `(,s (gensym)))
-	  syms)
-     ,@body))
-
-(defun simple? (x) (or (atom x) (eq (car x) 'quote)))
-
 (defun compile-simple (q body)
   (let ((fact (gensym)))
     `(dolist (,fact (db-query ',(car q)))
@@ -47,4 +39,3 @@
 (defmacro with-answer (query &body body)
   `(with-gensyms ,(vars-in query #'simple?)
      ,(compile-query query `(progn ,@body))))
-
