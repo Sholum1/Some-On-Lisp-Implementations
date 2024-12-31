@@ -22,7 +22,7 @@
      *procs*)))
 
 (defmacro program (name args &body body)
-  `(=defun .name ,args
+  `(=defun ,name ,args
 	   (setq *procs* nil)
 	   ,@body
 	   (catch *halt* (loop (pick-procss)))))
